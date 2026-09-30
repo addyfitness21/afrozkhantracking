@@ -2,14 +2,17 @@ import { NextResponse } from 'next/server';
 import { query } from '@/lib/db';
 import { getAuthUser } from '@/lib/auth';
 
-export async function GET() {
+export async function GET(request: Request) {
   try {
     const authUser = await getAuthUser();
     if (!authUser) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
-    const cleanUserId = String(authUser.id).trim();
+    const { searchParams } = new URL(request.url);
+    const paramUserId = searchParams.get('userId') || searchParams.get('username') || authUser.id;
+    const cleanUserId = String(paramUserId).trim();
+
     const res = await query('SELECT * FROM payment_reminders WHERE TRIM(user_id) = TRIM($1)', [cleanUserId]);
     const reminder = res.rows.length > 0 ? res.rows[0] : null;
 
@@ -28,12 +31,14 @@ export async function POST(request: Request) {
     }
 
     const body = await request.json();
-    const { action } = body;
+    const { action, userId } = body;
 
-    if (action === 'mark_paid') {
+    const targetUserId = (userId && String(userId).trim()) ? String(userId).trim() : String(authUser.id).trim();
+
+    if (action === 'mark_paid' || action === 'markPaid') {
       await query(
-        `UPDATE payment_reminders SET status = 'PAID', updated_at = CURRENT_TIMESTAMP WHERE user_id = $1`,
-        [authUser.id]
+        `UPDATE payment_reminders SET status = 'PAID', updated_at = CURRENT_TIMESTAMP WHERE TRIM(user_id) = TRIM($1)`,
+        [targetUserId]
       );
       return NextResponse.json({ success: true, message: 'Payment status updated to PAID' });
     }
