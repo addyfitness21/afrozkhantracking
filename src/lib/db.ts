@@ -7,10 +7,7 @@ dotenv.config();
 
 const connectionString = process.env.DATABASE_URL || '';
 
-// Local fallback JSON database file
-const DATA_DIR = path.join(process.cwd(), '.data');
-const DB_FILE = path.join(DATA_DIR, 'store.json');
-
+// Deduplicate users by clean user ID
 function deduplicateUsers(users: any[]) {
   const map = new Map();
   for (const u of users) {
@@ -21,47 +18,91 @@ function deduplicateUsers(users: any[]) {
   return Array.from(map.values());
 }
 
+// Serverless-safe directory determination (defaults to process.cwd()/.data, falls back to /tmp/.data)
+function getStoragePaths() {
+  let dataDir = path.join(process.cwd(), '.data');
+  let dbFile = path.join(dataDir, 'store.json');
+  return { dataDir, dbFile };
+}
+
 function ensureLocalStore() {
-  if (!fs.existsSync(DATA_DIR)) {
-    fs.mkdirSync(DATA_DIR, { recursive: true });
-  }
-  if (!fs.existsSync(DB_FILE)) {
-    const initialData = {
-      users: [
-        { id: '2', password: '2', name: 'Coach Afroz Khan (Admin)', role: 'ADMIN', created_at: new Date().toISOString() }
-      ],
-      daily_logs: [],
-      plans: [],
-      messages: [],
-      payment_reminders: []
-    };
-    fs.writeFileSync(DB_FILE, JSON.stringify(initialData, null, 2));
+  try {
+    const { dataDir, dbFile } = getStoragePaths();
+    if (!fs.existsSync(dataDir)) {
+      try {
+        fs.mkdirSync(dataDir, { recursive: true });
+      } catch (e) {
+        // Fallback to /tmp if process.cwd() is read-only (e.g., Vercel serverless)
+        const tmpDir = path.join('/tmp', '.data');
+        if (!fs.existsSync(tmpDir)) {
+          fs.mkdirSync(tmpDir, { recursive: true });
+        }
+        const tmpFile = path.join(tmpDir, 'store.json');
+        if (!fs.existsSync(tmpFile)) {
+          const initialData = {
+            users: [{ id: '2', password: '2', name: 'Coach Afroz Khan (Admin)', role: 'ADMIN', created_at: new Date().toISOString() }],
+            daily_logs: [],
+            plans: [],
+            messages: [],
+            payment_reminders: []
+          };
+          fs.writeFileSync(tmpFile, JSON.stringify(initialData, null, 2));
+        }
+        return { dataDir: tmpDir, dbFile: tmpFile };
+      }
+    }
+
+    if (!fs.existsSync(dbFile)) {
+      const initialData = {
+        users: [{ id: '2', password: '2', name: 'Coach Afroz Khan (Admin)', role: 'ADMIN', created_at: new Date().toISOString() }],
+        daily_logs: [],
+        plans: [],
+        messages: [],
+        payment_reminders: []
+      };
+      fs.writeFileSync(dbFile, JSON.stringify(initialData, null, 2));
+    }
+    return { dataDir, dbFile };
+  } catch (err) {
+    const tmpDir = path.join('/tmp', '.data');
+    const tmpFile = path.join(tmpDir, 'store.json');
+    try {
+      if (!fs.existsSync(tmpDir)) fs.mkdirSync(tmpDir, { recursive: true });
+      if (!fs.existsSync(tmpFile)) {
+        fs.writeFileSync(tmpFile, JSON.stringify({
+          users: [{ id: '2', password: '2', name: 'Coach Afroz Khan (Admin)', role: 'ADMIN', created_at: new Date().toISOString() }],
+          daily_logs: [], plans: [], messages: [], payment_reminders: []
+        }, null, 2));
+      }
+    } catch (e) {}
+    return { dataDir: tmpDir, dbFile: tmpFile };
   }
 }
 
 export function readLocalStore() {
-  ensureLocalStore();
+  const { dbFile } = ensureLocalStore();
   try {
-    const content = fs.readFileSync(DB_FILE, 'utf-8');
-    const data = JSON.parse(content);
-    if (data.users) {
-      data.users = deduplicateUsers(data.users);
+    if (fs.existsSync(dbFile)) {
+      const content = fs.readFileSync(dbFile, 'utf-8');
+      const data = JSON.parse(content);
+      if (data.users) data.users = deduplicateUsers(data.users);
+      if (!data.messages) data.messages = [];
+      if (!data.payment_reminders) data.payment_reminders = [];
+      return data;
     }
-    if (!data.messages) data.messages = [];
-    if (!data.payment_reminders) data.payment_reminders = [];
-    return data;
-  } catch (e) {
-    ensureLocalStore();
-    return JSON.parse(fs.readFileSync(DB_FILE, 'utf-8'));
-  }
+  } catch (e) {}
+  return {
+    users: [{ id: '2', password: '2', name: 'Coach Afroz Khan (Admin)', role: 'ADMIN', created_at: new Date().toISOString() }],
+    daily_logs: [], plans: [], messages: [], payment_reminders: []
+  };
 }
 
 export function writeLocalStore(data: any) {
-  ensureLocalStore();
-  if (data.users) {
-    data.users = deduplicateUsers(data.users);
-  }
-  fs.writeFileSync(DB_FILE, JSON.stringify(data, null, 2));
+  const { dbFile } = ensureLocalStore();
+  try {
+    if (data.users) data.users = deduplicateUsers(data.users);
+    fs.writeFileSync(dbFile, JSON.stringify(data, null, 2));
+  } catch (e) {}
 }
 
 let useLocalFallback = false;

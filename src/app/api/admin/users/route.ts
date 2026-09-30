@@ -82,7 +82,7 @@ export async function POST(request: Request) {
       if (parsedInitialWeight) {
         const today = new Date().toISOString().split('T')[0];
         await query(
-          'INSERT INTO daily_logs (user_id, log_date, weight, age, notes) VALUES ($1, $2, $3, $4, $5) ON CONFLICT (user_id, log_date) DO NOTHING',
+          'INSERT INTO daily_logs (user_id, log_date, weight, age, notes) VALUES ($1, $2, $3, $4, $5)',
           [cleanId, today, parsedInitialWeight, parsedAge, 'Initial onboarding weight set by Admin']
         );
       }
