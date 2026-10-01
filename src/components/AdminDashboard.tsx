@@ -348,6 +348,15 @@ export default function AdminDashboard({ user, onLogout }: AdminDashboardProps) 
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || 'Failed to update admin credentials');
 
+      const updatedUser = {
+        id: data.newUserId || adminSelfId.trim(),
+        name: adminSelfName.trim(),
+        role: 'ADMIN',
+      };
+      try {
+        localStorage.setItem('fitpulse_user', JSON.stringify(updatedUser));
+      } catch (e) {}
+
       showToast('success', 'Admin settings updated successfully!');
       setShowAdminSettingsModal(false);
       await fetchUsers();

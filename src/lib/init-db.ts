@@ -78,9 +78,9 @@ export async function initDatabase() {
     // Remove any demo client user '1' if present
     await query(`DELETE FROM users WHERE id = '1'`);
 
-    // Seed Admin ID: 2, Password: 2
-    const admin2 = await query(`SELECT id FROM users WHERE id = '2'`);
-    if (admin2.rows.length === 0) {
+    // Seed Admin only if NO ADMIN account exists in the database
+    const existingAdmin = await query(`SELECT id FROM users WHERE role = 'ADMIN'`);
+    if (existingAdmin.rows.length === 0) {
       await query(
         `INSERT INTO users (id, password, name, role) VALUES ($1, $2, $3, $4)`,
         ['2', '2', 'Coach Afroz Khan (Admin)', 'ADMIN']

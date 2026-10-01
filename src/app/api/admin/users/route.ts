@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server';
 import { query } from '@/lib/db';
-import { getAuthUser } from '@/lib/auth';
+import { getAuthUser, createToken } from '@/lib/auth';
 
 export async function GET() {
   try {
@@ -150,13 +150,35 @@ export async function POST(request: Request) {
         if (check.rows.length > 0) {
           return NextResponse.json({ error: 'New User ID is already taken by another account.' }, { status: 400 });
         }
+
+        // Update references in child tables before updating users primary key
+        await query('UPDATE daily_logs SET user_id = $1 WHERE TRIM(user_id) = $2', [nId, cId]);
+        await query('UPDATE plans SET user_id = $1 WHERE TRIM(user_id) = $2', [nId, cId]);
+        await query('UPDATE messages SET user_id = $1 WHERE TRIM(user_id) = $2', [nId, cId]);
+        await query('UPDATE payment_reminders SET user_id = $1 WHERE TRIM(user_id) = $2', [nId, cId]);
       }
 
       await query(
         'UPDATE users SET id = $1, name = $2, password = $3, age = $4, initial_weight = $5, height = $6, target_weight = $7, gender = $8 WHERE TRIM(id) = $9',
         [nId, nName, nPass, pAge, pInitialWeight, pHeight, pTargetWeight, pGender, cId]
       );
-      return NextResponse.json({ success: true, message: 'Credentials updated successfully.', newUserId: nId });
+
+      const response = NextResponse.json({ success: true, message: 'Credentials updated successfully.', newUserId: nId });
+
+      // If updating the currently logged-in Admin's credentials, issue a refreshed token cookie
+      if (cId === authUser.id) {
+        const refreshedUser = { id: nId, name: nName, role: authUser.role };
+        const token = createToken(refreshedUser);
+        response.cookies.set('fitpulse_token', token, {
+          httpOnly: true,
+          secure: process.env.NODE_ENV === 'production',
+          sameSite: 'lax',
+          path: '/',
+          maxAge: 30 * 24 * 60 * 60,
+        });
+      }
+
+      return response;
     }
 
     return NextResponse.json({ error: 'Invalid action specified' }, { status: 400 });
