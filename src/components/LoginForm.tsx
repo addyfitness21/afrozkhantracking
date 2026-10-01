@@ -1,17 +1,31 @@
 'use client';
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Lock, User, ArrowRight, Activity, AlertCircle } from 'lucide-react';
 
 interface LoginFormProps {
+  initialUserId?: string;
+  title?: string;
+  subtitle?: string;
   onLoginSuccess: (user: { id: string; name: string; role: 'USER' | 'ADMIN' }) => void;
 }
 
-export default function LoginForm({ onLoginSuccess }: LoginFormProps) {
-  const [userId, setUserId] = useState('');
+export default function LoginForm({
+  initialUserId = '',
+  title = 'Afroz Khan Fitness',
+  subtitle = 'Training Portal Login',
+  onLoginSuccess,
+}: LoginFormProps) {
+  const [userId, setUserId] = useState(initialUserId);
   const [password, setPassword] = useState('');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
+
+  useEffect(() => {
+    if (initialUserId) {
+      setUserId(initialUserId);
+    }
+  }, [initialUserId]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -59,10 +73,10 @@ export default function LoginForm({ onLoginSuccess }: LoginFormProps) {
               <Activity className="w-7 h-7" />
             </div>
             <h1 className="text-2xl font-bold tracking-tight text-slate-900">
-              Afroz Khan Fitness
+              {title}
             </h1>
             <p className="text-xs font-semibold text-indigo-600 tracking-wide uppercase mt-1">
-              Training Portal Login
+              {subtitle}
             </p>
           </div>
 
@@ -105,6 +119,7 @@ export default function LoginForm({ onLoginSuccess }: LoginFormProps) {
                   onChange={(e) => setPassword(e.target.value)}
                   placeholder="Enter Password"
                   required
+                  autoFocus
                   className="w-full glass-input rounded-xl pl-10 pr-4 py-2.5 text-sm"
                 />
               </div>
