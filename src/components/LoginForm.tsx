@@ -2,6 +2,7 @@
 
 import React, { useState, useEffect } from 'react';
 import { Lock, User, ArrowRight, Activity, AlertCircle } from 'lucide-react';
+import { saveTabSession } from '@/lib/clientAuth';
 
 interface LoginFormProps {
   initialUserId?: string;
@@ -48,6 +49,10 @@ export default function LoginForm({
 
       if (!res.ok || !data.success) {
         throw new Error(data.error || 'Invalid credentials');
+      }
+
+      if (data.token) {
+        saveTabSession(data.token, data.user);
       }
 
       onLoginSuccess(data.user);

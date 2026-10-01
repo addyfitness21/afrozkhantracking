@@ -5,6 +5,7 @@ import { useParams, useRouter } from 'next/navigation';
 import UserDashboard from '@/components/UserDashboard';
 import LoginForm from '@/components/LoginForm';
 import { ArrowLeft, ShieldCheck, UserCheck } from 'lucide-react';
+import { getSessionToken, clearTabSession, authFetch } from '@/lib/clientAuth';
 
 export default function DedicatedUserPage() {
   const params = useParams();
@@ -16,18 +17,27 @@ export default function DedicatedUserPage() {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    // Strictly verify session with backend - do NOT auto-unlock from localStorage
+    // Check if this specific tab has an authenticated session token
+    const token = getSessionToken();
+    if (!token) {
+      // New tab / copied URL / unauthenticated tab -> strictly show login form
+      setAuthUser(null);
+      setLoading(false);
+      return;
+    }
+
     const checkSession = async () => {
       try {
-        const res = await fetch('/api/auth/me');
+        const res = await authFetch('/api/auth/me');
         const data = await res.json();
         if (res.ok && data.authenticated && data.user) {
           setAuthUser(data.user);
         } else {
+          clearTabSession();
           setAuthUser(null);
-          localStorage.removeItem('fitpulse_user');
         }
       } catch (err) {
+        clearTabSession();
         setAuthUser(null);
       } finally {
         setLoading(false);
@@ -39,12 +49,9 @@ export default function DedicatedUserPage() {
 
   const handleLoginSuccess = (u: { id: string; name: string; role: 'USER' | 'ADMIN' }) => {
     setAuthUser(u);
-    try {
-      localStorage.setItem('fitpulse_user', JSON.stringify(u));
-    } catch (e) {}
 
     if (u.role === 'ADMIN') {
-      // If admin logs in, stay on this client page in admin mode
+      // Admin stays on this client page with admin mode controls
     } else if (u.id.toLowerCase() !== targetUsername.toLowerCase()) {
       router.push(`/${encodeURIComponent(u.id)}`);
     }
@@ -52,9 +59,9 @@ export default function DedicatedUserPage() {
 
   const handleLogout = async () => {
     try {
-      await fetch('/api/auth/logout', { method: 'POST' });
+      await authFetch('/api/auth/logout', { method: 'POST' });
     } catch (e) {}
-    localStorage.removeItem('fitpulse_user');
+    clearTabSession();
     setAuthUser(null);
     router.push('/');
   };
@@ -70,7 +77,7 @@ export default function DedicatedUserPage() {
     );
   }
 
-  // If not logged in with password, require password authentication
+  // If not authenticated in this specific tab, display login form requiring password
   if (!authUser) {
     return (
       <LoginForm
@@ -90,7 +97,7 @@ export default function DedicatedUserPage() {
           <UserCheck className="w-12 h-12 text-indigo-600 mx-auto" />
           <h3 className="text-lg font-bold text-slate-900">Signed In As {authUser.name}</h3>
           <p className="text-xs text-slate-500">
-            You are currently authenticated as <strong className="text-slate-800 font-mono">{authUser.id}</strong>. To view <strong className="text-indigo-600 font-mono">/{targetUsername}</strong>, please sign in with that account's password.
+            You are currently authenticated in this tab as <strong className="text-slate-800 font-mono">{authUser.id}</strong>. To view <strong className="text-indigo-600 font-mono">/{targetUsername}</strong>, please sign in with that account's password.
           </p>
           <div className="flex flex-col gap-2 pt-2">
             <button

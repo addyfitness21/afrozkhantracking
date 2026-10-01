@@ -36,7 +36,7 @@ export async function POST(request: Request) {
 
     const userRow = res.rows[0];
 
-    // Check password match (supports plain text for seed users & newly created simple passwords)
+    // Check password match
     if (userRow.password !== cleanPass) {
       return NextResponse.json(
         { error: 'Invalid User ID or Password' },
@@ -55,15 +55,15 @@ export async function POST(request: Request) {
     const response = NextResponse.json({
       success: true,
       user: authUser,
+      token: token,
     });
 
-    // Set cookie (valid for 30 days)
-    response.cookies.set('fitpulse_token', token, {
+    // Do NOT set persistent domain cookie so other tabs or pasted URLs cannot auto-bypass login
+    response.cookies.set('fitpulse_token', '', {
       httpOnly: true,
-      secure: process.env.NODE_ENV === 'production',
-      sameSite: 'lax',
+      expires: new Date(0),
+      maxAge: 0,
       path: '/',
-      maxAge: 30 * 24 * 60 * 60,
     });
 
     return response;

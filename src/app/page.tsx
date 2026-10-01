@@ -8,10 +8,6 @@ export default function Home() {
   const router = useRouter();
 
   const handleLoginSuccess = (user: { id: string; name: string; role: 'USER' | 'ADMIN' }) => {
-    try {
-      localStorage.setItem('fitpulse_user', JSON.stringify(user));
-    } catch (e) {}
-
     if (user.role === 'ADMIN') {
       router.push('/admin');
     } else {

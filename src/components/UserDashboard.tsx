@@ -31,6 +31,8 @@ import {
   LineChart,
   Clock
 } from 'lucide-react';
+import { authFetch } from '@/lib/clientAuth';
+
 
 interface UserDashboardProps {
   user: {
@@ -117,7 +119,7 @@ export default function UserDashboard({ user, onLogout }: UserDashboardProps) {
   const handleMarkPaymentPaid = async () => {
     setMarkingPaymentPaid(true);
     try {
-      const res = await fetch('/api/user/payments', {
+      const res = await authFetch('/api/user/payments', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ action: 'mark_paid', userId: user.id })
@@ -139,13 +141,13 @@ export default function UserDashboard({ user, onLogout }: UserDashboardProps) {
     try {
       if (showLoader) setLoading(true);
 
-      const res = await fetch(`/api/user/dashboard?userId=${encodeURIComponent(user.id)}`);
+      const res = await authFetch(`/api/user/dashboard?userId=${encodeURIComponent(user.id)}`);
       const result = await res.json();
       if (res.ok) {
         setData(result);
       }
 
-      const resPay = await fetch(`/api/user/payments?userId=${encodeURIComponent(user.id)}`);
+      const resPay = await authFetch(`/api/user/payments?userId=${encodeURIComponent(user.id)}`);
       const dataPay = await resPay.json();
       if (resPay.ok) {
         setPaymentReminder(dataPay.reminder || null);
@@ -242,7 +244,7 @@ export default function UserDashboard({ user, onLogout }: UserDashboardProps) {
     setMessage(null);
 
     try {
-      const res = await fetch('/api/user/log', {
+      const res = await authFetch('/api/user/log', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({

@@ -35,6 +35,8 @@ import {
   RefreshCw,
   Maximize2
 } from 'lucide-react';
+import { authFetch } from '@/lib/clientAuth';
+
 
 interface AdminDashboardProps {
   user: { id: string; name: string; role: string };
@@ -182,7 +184,7 @@ export default function AdminDashboard({ user, onLogout }: AdminDashboardProps) 
 
   const fetchUsers = async () => {
     try {
-      const res = await fetch('/api/admin/users');
+      const res = await authFetch('/api/admin/users');
       const data = await res.json();
       if (res.ok) {
         const list = data.users || [];
@@ -229,7 +231,7 @@ export default function AdminDashboard({ user, onLogout }: AdminDashboardProps) 
       if (showLoader) setClientLoading(true);
 
       // 1. Fetch logs & plans
-      const resLogs = await fetch(`/api/admin/client-logs?userId=${uid}`);
+      const resLogs = await authFetch(`/api/admin/client-logs?userId=${uid}`);
       const dataLogs = await resLogs.json();
       if (resLogs.ok) {
         const client = dataLogs.client || null;
@@ -257,14 +259,14 @@ export default function AdminDashboard({ user, onLogout }: AdminDashboardProps) 
       }
 
       // 2. Fetch Chat messages
-      const resChat = await fetch(`/api/chat?userId=${uid}`);
+      const resChat = await authFetch(`/api/chat?userId=${uid}`);
       const dataChat = await resChat.json();
       if (resChat.ok) {
         setChatMessages(dataChat.messages || []);
       }
 
       // 3. Fetch Payment Reminder
-      const resPay = await fetch(`/api/admin/payments?userId=${uid}`);
+      const resPay = await authFetch(`/api/admin/payments?userId=${uid}`);
       const dataPay = await resPay.json();
       if (resPay.ok && dataPay.reminder && showLoader) {
         setPayAmount(String(dataPay.reminder.amount || ''));
@@ -311,7 +313,7 @@ export default function AdminDashboard({ user, onLogout }: AdminDashboardProps) 
     }
 
     try {
-      const res = await fetch('/api/admin/users', {
+      const res = await authFetch('/api/admin/users', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -360,7 +362,7 @@ export default function AdminDashboard({ user, onLogout }: AdminDashboardProps) 
 
     setSavingAdminSelf(true);
     try {
-      const res = await fetch('/api/admin/users', {
+      const res = await authFetch('/api/admin/users', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -402,7 +404,7 @@ export default function AdminDashboard({ user, onLogout }: AdminDashboardProps) 
 
     setSavingClientCreds(true);
     try {
-      const res = await fetch('/api/admin/users', {
+      const res = await authFetch('/api/admin/users', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -439,7 +441,7 @@ export default function AdminDashboard({ user, onLogout }: AdminDashboardProps) 
     if (!confirm(`Are you sure you want to delete client ID ${uid}?`)) return;
 
     try {
-      const res = await fetch('/api/admin/users', {
+      const res = await authFetch('/api/admin/users', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -472,7 +474,7 @@ export default function AdminDashboard({ user, onLogout }: AdminDashboardProps) 
     setSavingPlan(true);
 
     try {
-      const res = await fetch('/api/admin/plans', {
+      const res = await authFetch('/api/admin/plans', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -499,7 +501,7 @@ export default function AdminDashboard({ user, onLogout }: AdminDashboardProps) 
 
     setSendingMsg(true);
     try {
-      const res = await fetch('/api/chat', {
+      const res = await authFetch('/api/chat', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -529,7 +531,7 @@ export default function AdminDashboard({ user, onLogout }: AdminDashboardProps) 
 
     setSavingPayment(true);
     try {
-      const res = await fetch('/api/admin/payments', {
+      const res = await authFetch('/api/admin/payments', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
