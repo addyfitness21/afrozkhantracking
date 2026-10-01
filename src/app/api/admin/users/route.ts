@@ -159,7 +159,16 @@ export async function POST(request: Request) {
       }
 
       await query(
-        'UPDATE users SET id = $1, name = $2, password = $3, age = $4, initial_weight = $5, height = $6, target_weight = $7, gender = $8 WHERE TRIM(id) = $9',
+        `UPDATE users SET 
+          id = $1, 
+          name = $2, 
+          password = $3, 
+          age = COALESCE($4, age), 
+          initial_weight = COALESCE($5, initial_weight), 
+          height = COALESCE($6, height), 
+          target_weight = COALESCE($7, target_weight), 
+          gender = COALESCE($8, gender) 
+        WHERE TRIM(id) = $9`,
         [nId, nName, nPass, pAge, pInitialWeight, pHeight, pTargetWeight, pGender, cId]
       );
 

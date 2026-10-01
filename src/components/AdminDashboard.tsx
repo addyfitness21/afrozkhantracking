@@ -141,6 +141,9 @@ export default function AdminDashboard({ user, onLogout }: AdminDashboardProps) 
   const [newUserGender, setNewUserGender] = useState('MALE');
   const [newUserRole, setNewUserRole] = useState<'USER' | 'ADMIN'>('USER');
 
+  // Local admin user state to remain in sync when ID or Name changes
+  const [currentAdminUser, setCurrentAdminUser] = useState(user);
+
   // Admin Self Settings Modal state
   const [showAdminSettingsModal, setShowAdminSettingsModal] = useState(false);
   const [adminSelfId, setAdminSelfId] = useState(user.id);
@@ -180,10 +183,11 @@ export default function AdminDashboard({ user, onLogout }: AdminDashboardProps) 
       const data = await res.json();
       if (res.ok) {
         setUsersList(data.users || []);
-        const currentAdmin = (data.users || []).find((u: any) => u.id === user.id);
-        if (currentAdmin) {
-          setAdminSelfName(currentAdmin.name);
-          setAdminSelfPass(currentAdmin.password || '');
+        // DO NOT overwrite adminSelfName or adminSelfPass if modal is currently open to prevent vanishing text while typing!
+        const found = (data.users || []).find((u: any) => String(u.id).trim() === String(currentAdminUser.id).trim() || u.role === 'ADMIN');
+        if (found && !showAdminSettingsModal) {
+          setAdminSelfName((prev) => prev || found.name);
+          setAdminSelfPass((prev) => prev || found.password || '');
         }
       }
     } catch (err) {
@@ -191,6 +195,19 @@ export default function AdminDashboard({ user, onLogout }: AdminDashboardProps) 
     } finally {
       setLoading(false);
     }
+  };
+
+  const handleOpenAdminSettingsModal = () => {
+    const found = usersList.find((u: any) => String(u.id).trim() === String(currentAdminUser.id).trim() || u.role === 'ADMIN');
+    if (found) {
+      setAdminSelfId(found.id);
+      setAdminSelfName(found.name);
+      setAdminSelfPass(found.password || '');
+    } else {
+      setAdminSelfId(currentAdminUser.id);
+      setAdminSelfName(currentAdminUser.name);
+    }
+    setShowAdminSettingsModal(true);
   };
 
   // Initial user fetch & polling every 4s for real-time user updates
@@ -338,7 +355,7 @@ export default function AdminDashboard({ user, onLogout }: AdminDashboardProps) 
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           action: 'updateCredentials',
-          currentUserId: user.id,
+          currentUserId: currentAdminUser.id,
           newUserId: adminSelfId.trim(),
           newName: adminSelfName.trim(),
           newPassword: adminSelfPass.trim(),
@@ -353,6 +370,7 @@ export default function AdminDashboard({ user, onLogout }: AdminDashboardProps) 
         name: adminSelfName.trim(),
         role: 'ADMIN',
       };
+      setCurrentAdminUser(updatedUser);
       try {
         localStorage.setItem('fitpulse_user', JSON.stringify(updatedUser));
       } catch (e) {}
@@ -576,7 +594,7 @@ export default function AdminDashboard({ user, onLogout }: AdminDashboardProps) 
           </div>
           <div>
             <div className="flex items-center gap-2">
-              <h1 className="text-base font-bold text-slate-900 tracking-tight">{user.name || 'Coach Afroz Khan'}</h1>
+              <h1 className="text-base font-bold text-slate-900 tracking-tight">{currentAdminUser.name || 'Coach Afroz Khan'}</h1>
               <span className="px-2 py-0.5 text-[10px] font-extrabold uppercase rounded-full bg-indigo-50 text-indigo-700 border border-indigo-200">
                 Admin Panel
               </span>
@@ -587,7 +605,7 @@ export default function AdminDashboard({ user, onLogout }: AdminDashboardProps) 
 
         <div className="flex items-center gap-2.5">
           <button
-            onClick={() => setShowAdminSettingsModal(true)}
+            onClick={handleOpenAdminSettingsModal}
             className="px-3.5 py-2 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-semibold flex items-center gap-1.5 transition-all border border-slate-200 active:scale-95"
             title="Admin Settings & Credentials"
           >
