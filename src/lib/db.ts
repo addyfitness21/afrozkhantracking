@@ -131,6 +131,13 @@ export async function query(text: string, params: any[] = []) {
     return { rows: user ? [user] : [] };
   }
 
+  // 1b. SELECT users WHERE role = $1 (used to find admin by role)
+  if (normalizedText.includes('FROM USERS WHERE ROLE =')) {
+    const roleVal = String(params[0]).trim().toUpperCase();
+    const matched = store.users.filter((u: any) => String(u.role).trim().toUpperCase() === roleVal);
+    return { rows: matched };
+  }
+
   // 2. SELECT users (ALL ADMIN LIST)
   if (normalizedText.includes('FROM USERS U') || normalizedText.includes('SELECT U.ID')) {
     const result = store.users.map((u: any) => {

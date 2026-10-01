@@ -100,7 +100,7 @@ export async function POST(request: Request) {
       return NextResponse.json({ success: true, message: `User ${cleanId} created successfully.` });
     }
 
-    // 2. Edit / Change User Password
+    // 2. Change User Password (simple)
     if (action === 'updatePassword') {
       if (!userId || !newPassword) {
         return NextResponse.json({ error: 'User ID and new password are required' }, { status: 400 });
@@ -120,8 +120,11 @@ export async function POST(request: Request) {
       }
 
       const cleanUserId = String(userId).trim();
-      if (cleanUserId === authUser.id) {
-        return NextResponse.json({ error: 'You cannot delete your own admin account while logged in.' }, { status: 400 });
+
+      // Prevent deleting the only ADMIN account
+      const adminRows = await query('SELECT id FROM users WHERE role = $1', ['ADMIN']);
+      if (adminRows.rows.length <= 1 && adminRows.rows[0]?.id === cleanUserId) {
+        return NextResponse.json({ error: 'You cannot delete the only admin account.' }, { status: 400 });
       }
 
       await query('DELETE FROM users WHERE TRIM(id) = $1', [cleanUserId]);
@@ -130,34 +133,51 @@ export async function POST(request: Request) {
 
     // 4. Update Credentials & Body Metrics
     if (action === 'updateCredentials') {
-      const { currentUserId, newUserId, newName, newPassword, newAge, newInitialWeight, newHeight, newTargetWeight, newGender } = body;
-      if (!currentUserId || !newUserId || !newName || !newPassword) {
+      const { currentUserId, newUserId, newName, newPassword: newPass, newAge, newInitialWeight, newHeight, newTargetWeight, newGender } = body;
+
+      if (!currentUserId || !newUserId || !newName || !newPass) {
         return NextResponse.json({ error: 'User ID, Name, and Password are required' }, { status: 400 });
       }
 
       const cId = String(currentUserId).trim();
       const nId = String(newUserId).trim();
       const nName = String(newName).trim();
-      const nPass = String(newPassword).trim();
-      const pAge = newAge ? parseInt(String(newAge), 10) : null;
-      const pInitialWeight = newInitialWeight ? parseFloat(String(newInitialWeight)) : null;
-      const pHeight = newHeight ? parseFloat(String(newHeight)) : null;
-      const pTargetWeight = newTargetWeight ? parseFloat(String(newTargetWeight)) : null;
-      const pGender = newGender ? String(newGender).trim().toUpperCase() : 'MALE';
+      const nPass = String(newPass).trim();
+      const pAge = newAge !== undefined && newAge !== null && newAge !== '' ? parseInt(String(newAge), 10) : null;
+      const pInitialWeight = newInitialWeight !== undefined && newInitialWeight !== null && newInitialWeight !== '' ? parseFloat(String(newInitialWeight)) : null;
+      const pHeight = newHeight !== undefined && newHeight !== null && newHeight !== '' ? parseFloat(String(newHeight)) : null;
+      const pTargetWeight = newTargetWeight !== undefined && newTargetWeight !== null && newTargetWeight !== '' ? parseFloat(String(newTargetWeight)) : null;
+      const pGender = newGender ? String(newGender).trim().toUpperCase() : null;
 
+      // Verify the user being updated actually exists in the DB
+      const existingUser = await query('SELECT id, role FROM users WHERE TRIM(id) = $1', [cId]);
+      if (existingUser.rows.length === 0) {
+        // currentUserId doesn't exist — try to find admin by role as fallback
+        const adminFallback = await query('SELECT id FROM users WHERE role = $1 LIMIT 1', ['ADMIN']);
+        if (adminFallback.rows.length === 0) {
+          return NextResponse.json({ error: 'Could not locate admin account in database.' }, { status: 404 });
+        }
+        // Redirect to the real admin ID found in the database
+        return NextResponse.json({ 
+          error: `Session is out of sync. Your actual Admin ID in the database is "${adminFallback.rows[0].id}". Please refresh the page and try again.` 
+        }, { status: 409 });
+      }
+
+      // If the ID is changing, make sure the new ID doesn't conflict with a DIFFERENT user
       if (cId !== nId) {
-        const check = await query('SELECT id FROM users WHERE TRIM(id) = $1', [nId]);
-        if (check.rows.length > 0) {
+        const conflict = await query('SELECT id FROM users WHERE TRIM(id) = $1', [nId]);
+        if (conflict.rows.length > 0 && String(conflict.rows[0].id).trim() !== cId) {
           return NextResponse.json({ error: 'New User ID is already taken by another account.' }, { status: 400 });
         }
 
-        // Update references in child tables before updating users primary key
+        // Update child table FK references before changing primary key
         await query('UPDATE daily_logs SET user_id = $1 WHERE TRIM(user_id) = $2', [nId, cId]);
         await query('UPDATE plans SET user_id = $1 WHERE TRIM(user_id) = $2', [nId, cId]);
         await query('UPDATE messages SET user_id = $1 WHERE TRIM(user_id) = $2', [nId, cId]);
         await query('UPDATE payment_reminders SET user_id = $1 WHERE TRIM(user_id) = $2', [nId, cId]);
       }
 
+      // Perform the update — use COALESCE to preserve optional fields if not provided
       await query(
         `UPDATE users SET 
           id = $1, 
@@ -172,11 +192,12 @@ export async function POST(request: Request) {
         [nId, nName, nPass, pAge, pInitialWeight, pHeight, pTargetWeight, pGender, cId]
       );
 
-      const response = NextResponse.json({ success: true, message: 'Credentials updated successfully.', newUserId: nId });
+      // Issue a refreshed JWT cookie for the admin with updated identity
+      const isAdminSelf = existingUser.rows[0]?.role === 'ADMIN';
+      const response = NextResponse.json({ success: true, message: 'Credentials updated successfully.', newUserId: nId, isAdminSelf });
 
-      // If updating the currently logged-in Admin's credentials, issue a refreshed token cookie
-      if (cId === authUser.id) {
-        const refreshedUser = { id: nId, name: nName, role: authUser.role };
+      if (isAdminSelf) {
+        const refreshedUser = { id: nId, name: nName, role: 'ADMIN' as const };
         const token = createToken(refreshedUser);
         response.cookies.set('fitpulse_token', token, {
           httpOnly: true,

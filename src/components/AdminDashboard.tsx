@@ -141,8 +141,8 @@ export default function AdminDashboard({ user, onLogout }: AdminDashboardProps) 
   const [newUserGender, setNewUserGender] = useState('MALE');
   const [newUserRole, setNewUserRole] = useState<'USER' | 'ADMIN'>('USER');
 
-  // Local admin user state to remain in sync when ID or Name changes
-  const [currentAdminUser, setCurrentAdminUser] = useState(user);
+  // Track the real admin ID as it changes over time (survives password/ID changes)
+  const [currentAdminId, setCurrentAdminId] = useState<string>('__ADMIN_ROLE__');
 
   // Admin Self Settings Modal state
   const [showAdminSettingsModal, setShowAdminSettingsModal] = useState(false);
@@ -172,6 +172,9 @@ export default function AdminDashboard({ user, onLogout }: AdminDashboardProps) 
   const [toast, setToast] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
   const [previewPhoto, setPreviewPhoto] = useState<{ url: string; date: string; weight?: number; notes?: string } | null>(null);
 
+  // Helper: always find the admin account from the latest usersList (by role, since ID can change)
+  const getAdminFromList = (list: any[]) => list.find((u: any) => u.role === 'ADMIN') || null;
+
   const showToast = (type: 'success' | 'error', text: string) => {
     setToast({ type, text });
     setTimeout(() => setToast(null), 4000);
@@ -182,12 +185,12 @@ export default function AdminDashboard({ user, onLogout }: AdminDashboardProps) 
       const res = await fetch('/api/admin/users');
       const data = await res.json();
       if (res.ok) {
-        setUsersList(data.users || []);
-        // DO NOT overwrite adminSelfName or adminSelfPass if modal is currently open to prevent vanishing text while typing!
-        const found = (data.users || []).find((u: any) => String(u.id).trim() === String(currentAdminUser.id).trim() || u.role === 'ADMIN');
-        if (found && !showAdminSettingsModal) {
-          setAdminSelfName((prev) => prev || found.name);
-          setAdminSelfPass((prev) => prev || found.password || '');
+        const list = data.users || [];
+        setUsersList(list);
+        // Find real admin from list and keep currentAdminId in sync
+        const admin = getAdminFromList(list);
+        if (admin) {
+          setCurrentAdminId(admin.id);
         }
       }
     } catch (err) {
@@ -197,15 +200,18 @@ export default function AdminDashboard({ user, onLogout }: AdminDashboardProps) 
     }
   };
 
+  // Open settings modal and always pre-populate from the real admin in usersList
   const handleOpenAdminSettingsModal = () => {
-    const found = usersList.find((u: any) => String(u.id).trim() === String(currentAdminUser.id).trim() || u.role === 'ADMIN');
-    if (found) {
-      setAdminSelfId(found.id);
-      setAdminSelfName(found.name);
-      setAdminSelfPass(found.password || '');
+    const admin = getAdminFromList(usersList);
+    if (admin) {
+      setAdminSelfId(admin.id);
+      setAdminSelfName(admin.name);
+      setAdminSelfPass(admin.password || '');
     } else {
-      setAdminSelfId(currentAdminUser.id);
-      setAdminSelfName(currentAdminUser.name);
+      // Fallback to JWT user if list not loaded yet
+      setAdminSelfId(user.id);
+      setAdminSelfName(user.name);
+      setAdminSelfPass('');
     }
     setShowAdminSettingsModal(true);
   };
@@ -348,6 +354,10 @@ export default function AdminDashboard({ user, onLogout }: AdminDashboardProps) 
       return;
     }
 
+    // Always use the real current admin ID from the live list, not stale JWT
+    const realAdmin = getAdminFromList(usersList);
+    const trueCurId = realAdmin?.id || currentAdminId || user.id;
+
     setSavingAdminSelf(true);
     try {
       const res = await fetch('/api/admin/users', {
@@ -355,7 +365,7 @@ export default function AdminDashboard({ user, onLogout }: AdminDashboardProps) 
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           action: 'updateCredentials',
-          currentUserId: currentAdminUser.id,
+          currentUserId: trueCurId,
           newUserId: adminSelfId.trim(),
           newName: adminSelfName.trim(),
           newPassword: adminSelfPass.trim(),
@@ -365,12 +375,10 @@ export default function AdminDashboard({ user, onLogout }: AdminDashboardProps) 
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || 'Failed to update admin credentials');
 
-      const updatedUser = {
-        id: data.newUserId || adminSelfId.trim(),
-        name: adminSelfName.trim(),
-        role: 'ADMIN',
-      };
-      setCurrentAdminUser(updatedUser);
+      const newId = data.newUserId || adminSelfId.trim();
+      setCurrentAdminId(newId);
+
+      const updatedUser = { id: newId, name: adminSelfName.trim(), role: 'ADMIN' };
       try {
         localStorage.setItem('fitpulse_user', JSON.stringify(updatedUser));
       } catch (e) {}
@@ -594,7 +602,7 @@ export default function AdminDashboard({ user, onLogout }: AdminDashboardProps) 
           </div>
           <div>
             <div className="flex items-center gap-2">
-              <h1 className="text-base font-bold text-slate-900 tracking-tight">{currentAdminUser.name || 'Coach Afroz Khan'}</h1>
+              <h1 className="text-base font-bold text-slate-900 tracking-tight">{getAdminFromList(usersList)?.name || user.name || 'Coach Afroz Khan'}</h1>
               <span className="px-2 py-0.5 text-[10px] font-extrabold uppercase rounded-full bg-indigo-50 text-indigo-700 border border-indigo-200">
                 Admin Panel
               </span>
