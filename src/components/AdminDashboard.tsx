@@ -35,7 +35,7 @@ import {
   RefreshCw,
   Maximize2
 } from 'lucide-react';
-import { authFetch } from '@/lib/clientAuth';
+import { authFetch, saveTabSession } from '@/lib/clientAuth';
 
 
 interface AdminDashboardProps {
@@ -380,10 +380,10 @@ export default function AdminDashboard({ user, onLogout }: AdminDashboardProps) 
       const newId = data.newUserId || adminSelfId.trim();
       setCurrentAdminId(newId);
 
-      const updatedUser = { id: newId, name: adminSelfName.trim(), role: 'ADMIN' };
-      try {
-        localStorage.setItem('fitpulse_user', JSON.stringify(updatedUser));
-      } catch (e) {}
+      const updatedUser = { id: newId, name: adminSelfName.trim(), role: 'ADMIN' as const };
+      if (data.token) {
+        saveTabSession(data.token, updatedUser);
+      }
 
       showToast('success', 'Admin settings updated successfully!');
       setShowAdminSettingsModal(false);
